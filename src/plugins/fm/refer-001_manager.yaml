@@ -1,0 +1,9 @@
+---
+module: reference.plugin
+class: FmPlugin
+specific_data:
+    service_type: "http"
+    service_host: "localhost"
+    service_port: 5000
+    service_root: "/redfish/v1"
+    timeout: 3.0

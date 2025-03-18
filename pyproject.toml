@@ -1,0 +1,42 @@
+[project]
+name = "fm-plugin-reference"
+version = "0.1.0"
+description = "Plugin for hw-control package (for reference FM)"
+authors = [{name = "NEC Corporation"}]
+dependencies = [
+    "requests",
+    "pydantic",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {file = "LICENSE"}
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pylint",
+    "pyright==1.1.335",
+    "flake8",
+    "fastapi",
+    "PyYAML",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+max-module-lines = 1600
+
+[tool.pytest.ini_options]
+pythonpath = "src"
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.scripts]
+test = "pytest -v --cov=src --cov-branch --cov-report=term-missing -v --cov-report=xml:coverage.xml"
+flake8 = "flake8 src tests --max-line-length=120"
+pyright.cmd = "pyright src tests"
+pyright.env = {PYTHONPATH="src:tests"}
+pylint = "pylint src tests"
+lint.composite = ["flake8", "pyright", "pylint"]
+lint.keep_going = true

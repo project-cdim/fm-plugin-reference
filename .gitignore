@@ -1,0 +1,8 @@
+.pytest_cache
+.coverage
+coverage.xml
+tests/__pycache__
+tests/app/common/__pycache__
+tests/app/common/utils/__pycache__
+tests/app/common/messages/__pycache__
+src/plugins/fm/reference/__pycache__
