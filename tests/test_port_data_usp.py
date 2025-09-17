@@ -21,15 +21,16 @@ import json
 from unittest import TestCase, mock
 from test_http_requests import _DEFAULT_SPECIFIC_DATA, _mock_response
 from test_port_data import _DEFAULT_NONE_PORT_MEMBERS
-from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HttpRequests, _PortDataUSP
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HTTPRequests, _PortDataUSP
 
 
 _DEFAULT_PROCESSOR_DATA = {
     "ProcessorType": "CPU",
     "Manufacturer": "manufacturer",
     "Model": "model",
-    "SerialNumber": "serial number"
+    "SerialNumber": "serial number",
 }
+_LOG_PREFIX = "WARNING:plugins.fm.reference.plugin:"
 
 
 class TestsInit(TestCase):
@@ -37,7 +38,7 @@ class TestsInit(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
 
     def test___init__normal(self):
         """Test for the initialization of instance variables."""
@@ -57,22 +58,24 @@ class TestsSaveLinkUSP(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.usp = _PortDataUSP("ComputeBlock-1", req)
         self.port_ids = ["ComputeBlock-1", "ComputeBlock-2", "DeviceBlock-3", "DeviceBlock-4"]
 
     def _mock_call(self, status_code, data, logmsg=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, json.dumps(data))
-                self.usp.save_link(self.port_ids)
-                if logmsg:
-                    log_func.assert_called_with(logmsg)
-                    self.assertEqual([_ErrorType.ERROR_CONTROL], self.usp.err.error)
-                    self.assertIsNone(self.usp.port.link)
-                else:
-                    log_func.assert_not_called()
-                    self.assertEqual([], self.usp.err.error)
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, json.dumps(data))
+
+            if logmsg:
+                with self.assertLogs(level="WARNING") as log:
+                    self.usp.save_link(self.port_ids)
+                self.assertEqual(log.output, [f"{_LOG_PREFIX}{logmsg}"])
+                self.assertEqual([_ErrorType.ERROR_CONTROL], self.usp.err.error)
+                self.assertIsNone(self.usp.port.link)
+            else:
+                with self.assertNoLogs(level="WARNING"):
+                    self.usp.save_link(self.port_ids)
+                self.assertEqual([], self.usp.err.error)
 
     def test_save_link_sysdata_is_none(self):
         """Test when the compute system schema cannot be retrieved."""
@@ -118,24 +121,26 @@ class TestsSavePortData(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.usp = _PortDataUSP("ComputeBlock-1", req)
 
-    def _mock_call(self, data, logmsgs=None, errors=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+    def _mock_call(self, data, logmsg=None, errors=None):
+        with mock.patch("requests.get") as req_func:
+            req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+            if logmsg:
+                with self.assertLogs(level="WARNING") as _cm:
+                    self.usp.save_port_data()
+                self.assertIn(logmsg, _cm.output[0])
+            else:
                 self.usp.save_port_data()
-                if errors:
-                    self.assertEqual(errors, self.usp.err.error)
-                if logmsgs:
-                    log_func.assert_has_calls([mock.call(x) for x in logmsgs])
+            if errors:
+                self.assertEqual(errors, self.usp.err.error)
 
     def test_save_port_data_resource_block_is_none(self):
         """Test when the resource block schema cannot be retrieved."""
         errors = [_ErrorType.ERROR_CONTROL]
         errmsg = "Server error case response status code is 500"
-        self._mock_call([(500, {"message": "Internal Server Error"})], [errmsg], errors)
+        self._mock_call([(500, {"message": "Internal Server Error"})], errmsg, errors)
         self.assertIsNone(self.usp.port.cpu_manufacturer)
         self.assertIsNone(self.usp.port.cpu_model)
         self.assertIsNone(self.usp.port.cpu_serial_number)
@@ -147,7 +152,7 @@ class TestsSavePortData(TestCase):
         zone = {"Zones": [{"@odata.id": "CompositionService/ResourceZones/zone"}]}
         data = {"Links": zone, "Processors": []}
         errmsg = f"ComputeBlock-1 usp processor not found\n{data}"
-        self._mock_call([(200, data)], [errmsg], errors)
+        self._mock_call([(200, data)], errmsg, errors)
         self.assertIsNone(self.usp.port.cpu_manufacturer)
         self.assertIsNone(self.usp.port.cpu_model)
         self.assertIsNone(self.usp.port.cpu_serial_number)
@@ -176,10 +181,10 @@ class TestsSavePortData(TestCase):
     def test_save_port_data_manufacturer_is_not_string(self):
         """Test when the manufacturer in the processor schema is not a string."""
         cpu_data = copy.deepcopy(_DEFAULT_PROCESSOR_DATA)
-        cpu_data["Manufacturer"] = 0  # type: ignore
+        cpu_data["Manufacturer"] = 0  # type: ignore[reportGeneralTypeIssues]
         data = [(200, {"Processors": [{"@odata.id": "path1"}]}), (200, cpu_data)]
         errmsg = f"Validation error {cpu_data}"
-        self._mock_call(data, [errmsg], [_ErrorType.ERROR_INTERNAL])
+        self._mock_call(data, errmsg, [_ErrorType.ERROR_INTERNAL])
         self.assertIsNone(self.usp.port.cpu_manufacturer)
 
     def test_save_port_data_model_is_none(self):
@@ -193,10 +198,10 @@ class TestsSavePortData(TestCase):
     def test_save_port_data_model_is_not_string(self):
         """Test when the model in the processor schema is not a string."""
         cpu_data = copy.deepcopy(_DEFAULT_PROCESSOR_DATA)
-        cpu_data["Model"] = {}  # type: ignore
+        cpu_data["Model"] = {}  # type: ignore[reportGeneralTypeIssues]
         data = [(200, {"Processors": [{"@odata.id": "path1"}]}), (200, cpu_data)]
         errmsg = f"Validation error {cpu_data}"
-        self._mock_call(data, [errmsg], [_ErrorType.ERROR_INTERNAL])
+        self._mock_call(data, errmsg, [_ErrorType.ERROR_INTERNAL])
         self.assertIsNone(self.usp.port.cpu_model)
 
     def test_save_port_data_serial_number_is_none(self):
@@ -210,10 +215,10 @@ class TestsSavePortData(TestCase):
     def test_save_port_data_serial_number_is_not_string(self):
         """Test when the serial number in the processor schema is not a string."""
         cpu_data = copy.deepcopy(_DEFAULT_PROCESSOR_DATA)
-        cpu_data["SerialNumber"] = []  # type: ignore
+        cpu_data["SerialNumber"] = []  # type: ignore[reportGeneralTypeIssues]
         data = [(200, {"Processors": [{"@odata.id": "path1"}]}), (200, cpu_data)]
         errmsg = f"Validation error {cpu_data}"
-        self._mock_call(data, [errmsg], [_ErrorType.ERROR_INTERNAL])
+        self._mock_call(data, errmsg, [_ErrorType.ERROR_INTERNAL])
         self.assertIsNone(self.usp.port.cpu_serial_number)
 
     def test_save_port_data_normal(self):
@@ -230,7 +235,7 @@ class TestsChangeLink(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.usp = _PortDataUSP("ComputeBlock-1", req)
 
     def test_change_link_failed(self):

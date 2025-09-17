@@ -7,7 +7,7 @@ dependencies = [
     "requests",
     "pydantic",
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 license = {file = "LICENSE"}
 
@@ -18,9 +18,14 @@ dev = [
     "pylint",
     "pyright==1.1.335",
     "flake8",
-    "fastapi",
     "PyYAML",
+    "mypy>=1.15.0",
+    "types-requests>=2.32.0.20250306",
+    "black>=25.1.0",
 ]
+
+[tool.black]
+line-length = 120
 
 [tool.pylint.format]
 max-line-length = 120
@@ -38,5 +43,8 @@ flake8 = "flake8 src tests --max-line-length=120"
 pyright.cmd = "pyright src tests"
 pyright.env = {PYTHONPATH="src:tests"}
 pylint = "pylint src tests"
-lint.composite = ["flake8", "pyright", "pylint"]
+mypy.cmd = "mypy src tests --explicit-package-bases"
+mypy.env = {MYPYPATH="src:tests"}
+black = "black --check src tests"
+lint.composite = ["flake8", "pyright", "pylint", "mypy", "black"]
 lint.keep_going = true

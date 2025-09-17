@@ -4,7 +4,7 @@ fm-plugin-reference - Reference Fabric Manager Plugin for hw-control
 
 ## Requirements
 
-- Python 3.11 and later
+- Python 3.12 and later
 - [pdm](https://pdm-project.org/en/latest/)
 - [hw-control](https://github.com/project-cdim/hw-control)
 - [hw-emulator-reference](https://github.com/project-cdim/hw-emulator-reference)
@@ -80,12 +80,14 @@ as follows.
 ## How to run lint
 
 ```bash
+pdm sync
 pdm run lint
 ```
 
 ## How to run unittest
 
 ```bash
+pdm sync
 pdm run test
 ```
 
@@ -96,11 +98,11 @@ pdm run test
 - src/plugins/fm/reference/plugin.py
   - The python module that is the FM Plugin core.
 - tests/test_fm_plugin.py
-  - Unit test module for `FmPlugin` class.
+  - Unit test module for `FMPlugin` class.
 - tests/test_error_ctrl.py
   - Unit test module for `_ErrorCtrl` class.
 - tests/test_http_requests.py
-  - Unit test module for `_HttpRequests` class.
+  - Unit test module for `_HTTPRequests` class.
 - tests/test_fabric_data.py
   - Unit test module for `_FabricData` class.
 - tests/test_switch_data.py

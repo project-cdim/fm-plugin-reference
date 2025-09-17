@@ -17,60 +17,61 @@ Mock object of app.common.basic_exceptions
 """
 
 
-class BaseHwControlError(Exception):
-    """Mock class of BaseHwControlError."""
+class BaseHWControlError(Exception):
+    """Mock class of BaseHWControlError."""
+
     def __init__(self, *args: object, additional_message: str = "") -> None:
         super().__init__(*args)
         self.additional_message = additional_message
 
 
-class UnknownHwControlError(BaseHwControlError):
-    """Mock class of UnknownHwControlError."""
+class UnknownHWControlError(BaseHWControlError):
+    """Mock class of UnknownHWControlError."""
 
 
-class ControlObjectHwControlError(BaseHwControlError):
-    """Mock class of ControlObjectHwControlError."""
+class ControlObjectHWControlError(BaseHWControlError):
+    """Mock class of ControlObjectHWControlError."""
 
 
-class ConfigurationHwControlError(BaseHwControlError):
-    """Mock class of ConfigurationHwControlError."""
+class ConfigurationHWControlError(BaseHWControlError):
+    """Mock class of ConfigurationHWControlError."""
 
 
-class InternalHwControlError(BaseHwControlError):
-    """Mock class of InternalConflictHwControlError."""
+class InternalHWControlError(BaseHWControlError):
+    """Mock class of InternalHWControlError."""
 
 
-class RequestConflictHwControlError(BaseHwControlError):
-    """Mock class of RequestConflictHwControlError."""
+class RequestConflictHWControlError(BaseHWControlError):
+    """Mock class of RequestConflictHWControlError."""
 
 
-class HostCpuNotFoundHwControlError(BaseHwControlError):
-    """Mock class of HostCpuNotFoundHwControlError."""
+class HostCPUNotFoundHWControlError(BaseHWControlError):
+    """Mock class of HostCPUNotFoundHWControlError."""
 
 
-class DeviceNotFoundHwControlError(BaseHwControlError):
-    """Mock class of DeviceNotFoundHwControlError."""
+class DeviceNotFoundHWControlError(BaseHWControlError):
+    """Mock class of DeviceNotFoundHWControlError."""
 
 
-class HostCpuAndDeviceNotFoundHwControlError(BaseHwControlError):
-    """Mock class of HostCpuAndDeviceNotFoundHwControlError."""
+class HostCPUAndDeviceNotFoundHWControlError(BaseHWControlError):
+    """Mock class of HostCPUAndDeviceNotFoundHWControlError."""
 
 
-class FmConnectFailureHwControlError(BaseHwControlError):
-    """Mock class of FmConnectFailureHwControlError."""
+class FMConnectFailureHWControlError(BaseHWControlError):
+    """Mock class of FMConnectFailureHWControlError."""
 
 
-class FmDisconnectFailureHwControlError(BaseHwControlError):
-    """Mock class of FmDisconnectFailureHwControlError."""
+class FMDisconnectFailureHWControlError(BaseHWControlError):
+    """Mock class of FMDisconnectFailureHWControlError."""
 
 
-class AuthenticationHwControlError(BaseHwControlError):
-    """Mock class of AuthenticationHwControlError."""
+class AuthenticationHWControlError(BaseHWControlError):
+    """Mock class of AuthenticationHWControlError."""
 
 
-class ResourceNotFoundHwControlError(BaseHwControlError):
-    """Mock class of ResourceNotFoundHwControlError."""
+class ResourceNotFoundHWControlError(BaseHWControlError):
+    """Mock class of ResourceNotFoundHWControlError."""
 
 
-class SwitchNotFoundHwControlError(BaseHwControlError):
-    """Mock class of SwitchNotFoundHwControlError."""
+class SwitchNotFoundHWControlError(BaseHWControlError):
+    """Mock class of SwitchNotFoundHWControlError."""

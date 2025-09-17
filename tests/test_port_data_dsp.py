@@ -20,7 +20,10 @@ import json
 from unittest import TestCase, mock
 from test_http_requests import _DEFAULT_SPECIFIC_DATA, _mock_response
 from test_port_data import _DEFAULT_NONE_PORT_MEMBERS
-from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HttpRequests, _PortDataDSP
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HTTPRequests, _PortDataDSP
+
+
+_LOG_PREFIX = "WARNING:plugins.fm.reference.plugin:"
 
 
 class TestsInit(TestCase):
@@ -28,7 +31,7 @@ class TestsInit(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
 
     def test___init___normal(self):
         """Test for the initialization of instance variables."""
@@ -47,22 +50,23 @@ class TestsSaveLinkDSP(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.dsp = _PortDataDSP("DeviceBlock-3", req)
         self.port_ids = ["ComputeBlock-1", "ComputeBlock-2", "DeviceBlock-3", "DeviceBlock-4"]
 
     def _mock_call(self, status_code, data, logmsg=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, json.dumps(data))
-                self.dsp.save_link(self.port_ids)
-                if logmsg:
-                    log_func.assert_called_with(logmsg)
-                    self.assertEqual([_ErrorType.ERROR_CONTROL], self.dsp.err.error)
-                    self.assertIsNone(self.dsp.port.link)
-                else:
-                    log_func.assert_not_called()
-                    self.assertEqual([], self.dsp.err.error)
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, json.dumps(data))
+            if logmsg:
+                with self.assertLogs(level="WARNING") as _cm:
+                    self.dsp.save_link(self.port_ids)
+                self.assertEqual(_cm.output, [f"{_LOG_PREFIX}{logmsg}"])
+                self.assertEqual([_ErrorType.ERROR_CONTROL], self.dsp.err.error)
+                self.assertIsNone(self.dsp.port.link)
+            else:
+                with self.assertNoLogs(level="WARNING"):
+                    self.dsp.save_link(self.port_ids)
+                self.assertEqual([], self.dsp.err.error)
 
     def test_save_link_rbdata_is_none(self):
         """Test when the resource block schema cannot be retrieved."""
@@ -103,26 +107,34 @@ class TestsSavePortData1(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.dsp = _PortDataDSP("DeviceBlock-3", req)
 
     def _mock_call(self, data, logmsgs=None, errors=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+        with mock.patch("requests.get") as req_func:
+            req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+            if logmsgs:
+                with self.assertLogs(level="WARNING") as _cm:
+                    self.dsp.save_port_data()
+                self.assertEqual(_cm.output, [f"{_LOG_PREFIX}{x}" for x in logmsgs])
+            else:
                 self.dsp.save_port_data()
-                if errors:
-                    self.assertEqual(errors, self.dsp.err.error)
-                if logmsgs:
-                    log_func.assert_has_calls([mock.call(x) for x in logmsgs])
+            if errors:
+                self.assertEqual(errors, self.dsp.err.error)
 
     def _check_none(self, members: list):
         for member in members:
             self.assertIsNone(getattr(self.dsp.port, member))
 
     def _check_all_data_not_set(self):
-        members = ["device_type", "pcie_device_serial_number", "pcie_device_id",
-                   "pcie_vendor_id", "pci_class_code", "capacity"]
+        members = [
+            "device_type",
+            "pcie_device_serial_number",
+            "pcie_device_id",
+            "pcie_vendor_id",
+            "pci_class_code",
+            "capacity",
+        ]
         self._check_none(members)
         self.assertEqual({}, self.dsp.port.device_keys)
 
@@ -240,7 +252,7 @@ class TestsSavePortData1(TestCase):
 
     def test_save_port_data_class_code_is_not_string(self):
         """Test for when the ClassCode in the PCIe function schema is not a string."""
-        pciefunc = {"DeviceId": "1234", "VendorId": "5678", "ClassCode": 0x9abcde}
+        pciefunc = {"DeviceId": "1234", "VendorId": "5678", "ClassCode": 0x9ABCDE}
         self._check_pcie_function(pciefunc)
         self.assertIsNone(self.dsp.port.pci_class_code)
 
@@ -262,26 +274,34 @@ class TestsSavePortData2(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.dsp = _PortDataDSP("DeviceBlock-3", req)
 
     def _mock_call(self, data, logmsgs=None, errors=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+        with mock.patch("requests.get") as req_func:
+            req_func.side_effect = [_mock_response(x, json.dumps(y)) for x, y in data]
+            if logmsgs:
+                with self.assertLogs(level="WARNING") as _cm:
+                    self.dsp.save_port_data()
+                self.assertEqual(_cm.output, [f"{_LOG_PREFIX}{x}" for x in logmsgs])
+            else:
                 self.dsp.save_port_data()
-                if errors:
-                    self.assertEqual(errors, self.dsp.err.error)
-                if logmsgs:
-                    log_func.assert_has_calls([mock.call(x) for x in logmsgs])
+            if errors:
+                self.assertEqual(errors, self.dsp.err.error)
 
     def _check_none(self, members: list):
         for member in members:
             self.assertIsNone(getattr(self.dsp.port, member))
 
     def _check_all_data_not_set(self):
-        members = ["device_type", "pcie_device_serial_number", "pcie_device_id",
-                   "pcie_vendor_id", "pci_class_code", "capacity"]
+        members = [
+            "device_type",
+            "pcie_device_serial_number",
+            "pcie_device_id",
+            "pcie_vendor_id",
+            "pci_class_code",
+            "capacity",
+        ]
         self._check_none(members)
         self.assertEqual({}, self.dsp.port.device_keys)
 
@@ -295,7 +315,7 @@ class TestsSavePortData2(TestCase):
         self.assertEqual("PCIe", self.dsp.port.device_type)
         self.assertEqual("1234", self.dsp.port.pcie_device_id)
         self.assertEqual("5678", self.dsp.port.pcie_vendor_id)
-        self.assertEqual({"base": 0x9a, "sub": 0xbc, "prog": 0xde}, self.dsp.port.pci_class_code)
+        self.assertEqual({"base": 0x9A, "sub": 0xBC, "prog": 0xDE}, self.dsp.port.pci_class_code)
         self.assertIsNone(self.dsp.port.capacity)
 
     def test_save_port_data_processor_device_normal(self):

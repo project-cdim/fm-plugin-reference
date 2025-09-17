@@ -13,14 +13,14 @@
 #  under the License.
 
 """
-Test program for _HttpRequests class
+Test program for _HTTPRequests class
 """
 
 import io
 import json
 from unittest import TestCase, mock
 import requests
-from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HttpRequests
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HTTPRequests
 
 
 _DEFAULT_SPECIFIC_DATA = {
@@ -30,6 +30,7 @@ _DEFAULT_SPECIFIC_DATA = {
     "service_root": "/redfish/v1",
     "timeout": 3.0,
 }
+_LOG_PREFIX = "WARNING:plugins.fm.reference.plugin:"
 
 
 def _mock_response(code: int, data: str):
@@ -48,47 +49,47 @@ class TestInit(TestCase):
 
     def test___init___specific_data_is_none(self):
         """Test to ensure that no assertion is raised when specific_data is None."""
-        req = _HttpRequests(None, self.err)
+        req = _HTTPRequests(None, self.err)
         self.assertEqual(self.err, req.err)
 
     def test___init___specific_data_dose_not_have_service_type(self):
         """Test when service_type is not set in specific_data."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "service_type"}
-        req = _HttpRequests(specific_data, self.err)
+        req = _HTTPRequests(specific_data, self.err)
         self.assertIsNone(req.url)
         self.assertEqual([_ErrorType.ERROR_INCORRECT], req.err.error)
 
     def test___init___specific_data_dose_not_have_service_host(self):
         """Test when service_host is not set in specific_data."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "service_host"}
-        req = _HttpRequests(specific_data, self.err)
+        req = _HTTPRequests(specific_data, self.err)
         self.assertIsNone(req.url)
         self.assertEqual([_ErrorType.ERROR_INCORRECT], req.err.error)
 
     def test___init___specific_data_dose_not_have_service_port(self):
         """Test when service_port is not set in specific_data."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "service_port"}
-        req = _HttpRequests(specific_data, self.err)
+        req = _HTTPRequests(specific_data, self.err)
         self.assertIsNone(req.url)
         self.assertEqual([_ErrorType.ERROR_INCORRECT], req.err.error)
 
     def test___init___specific_data_dose_not_have_service_root(self):
         """Test when service_root is not set in specific_data."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "service_root"}
-        req = _HttpRequests(specific_data, self.err)
+        req = _HTTPRequests(specific_data, self.err)
         self.assertIsNone(req.root)
         self.assertEqual([_ErrorType.ERROR_INCORRECT], req.err.error)
 
     def test___init___specific_data_dose_not_have_timeout(self):
         """Test when service_timeout is not set in specific_data."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "timeout"}
-        req = _HttpRequests(specific_data, self.err)
+        req = _HTTPRequests(specific_data, self.err)
         self.assertEqual(1.0, req.timeout)
         self.assertEqual([], req.err.error)
 
     def test___init___normal(self):
         """Test when all parameters are set in specific_data."""
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, self.err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, self.err)
         self.assertEqual(3.0, req.timeout)
         self.assertEqual("/redfish/v1", req.root)
         self.assertEqual("http://localhost:5555", req.url)
@@ -98,33 +99,36 @@ class TestInit(TestCase):
 class TestCheckResponse(TestCase):
     """Test class for _check_response method."""
 
+    err: _ErrorCtrl
+    req: _HTTPRequests
+
     @classmethod
     def setUpClass(cls):
         cls.err = _ErrorCtrl()
-        cls.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, cls.err)
+        cls.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, cls.err)
 
     def tearDown(self):
         self.err.error = []
 
     def _mock_call(self, status_code: int, text: str, errno: _ErrorType, logmsg: str):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, text)
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, text)
+            with self.assertLogs(level="WARNING") as _cm:
                 self.assertIsNone(self.req.get(""))
-                self.assertEqual([errno], self.err.error)
-                log_func.assert_called_with(logmsg)
+            self.assertEqual([errno], self.err.error)
+            self.assertIn(f"{_LOG_PREFIX}{logmsg}", _cm.output[0])
 
     def test__check_response_status_code_is_500(self):
         """Test when an HTTP status code 500 is returned."""
         logmsg = "Server error case response status code is 500"
         text = json.dumps({"message": "Internal Server Error"})
-        self._mock_call(500,  text, _ErrorType.ERROR_CONTROL, logmsg)
+        self._mock_call(500, text, _ErrorType.ERROR_CONTROL, logmsg)
 
     def test__check_response_status_code_is_not_200(self):
         """Test when a status code other than 200 is returned."""
         logmsg = "Internal error case response status code is 404"
         text = json.dumps({"message": "Not Found"})
-        self._mock_call(404,  text, _ErrorType.ERROR_INTERNAL, logmsg)
+        self._mock_call(404, text, _ErrorType.ERROR_INTERNAL, logmsg)
 
     def test__check_response_text_is_not_json(self):
         """Test when the returned data is not in JSON format."""
@@ -133,17 +137,18 @@ class TestCheckResponse(TestCase):
 
     def test__check_response_normal(self):
         """Test when data retrieval is successful."""
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                data = {"sample": "sample"}
-                req_func.return_value = _mock_response(200, json.dumps(data))
+        with mock.patch("requests.get") as req_func:
+            data = {"sample": "sample"}
+            req_func.return_value = _mock_response(200, json.dumps(data))
+            with self.assertNoLogs(level="WARNING"):
                 self.assertEqual(data, self.req.get(""))
-                self.assertEqual([], self.err.error)
-                log_func.assert_not_called()
+            self.assertEqual([], self.err.error)
 
 
-class TestRequsets(TestCase):
+class TestRequests(TestCase):
     """Test class for _request method."""
+
+    err: _ErrorCtrl
 
     @classmethod
     def setUpClass(cls):
@@ -152,46 +157,48 @@ class TestRequsets(TestCase):
     def tearDown(self):
         self.err.error = []
 
-    def _mock_call(self, specific_data: dict, method: str, errno: _ErrorType, logmsg: str):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            req = _HttpRequests(specific_data, self.err)
+    def _mock_call(self, specific_data: dict, method: str, errno: _ErrorType, logmsgs: list):
+        with self.assertLogs(level="WARNING") as _cm:
+            req = _HTTPRequests(specific_data, self.err)
             # pylint: disable=protected-access
-            req._check_response = mock.Mock()
+            req._check_response = mock.Mock()  # type: ignore[method-assign]
             req._check_response.return_value = _mock_response(200, json.dumps({"data": "data"}))
             self.assertIsNone(req._request(method, ""))
             self.assertEqual([errno], self.err.error)
-            self.assertIn(logmsg, log_func.call_args[0][0])
+            for logmsg in logmsgs:
+                self.assertIn(logmsg, _cm.output[0])
 
     def test__requests_url_is_none(self):
-        """Test when the url attribute of the _HttpRequests class is not set."""
+        """Test when the url attribute of the _HTTPRequests class is not set."""
         specific_data = {k: v for k, v in _DEFAULT_SPECIFIC_DATA.items() if k != "service_type"}
-        logmsg = "Invalid specific_data. None, localhost, 5555, /redfish/v1"
+        logmsg = ["Invalid specific_data. None, localhost, 5555, /redfish/v1"]
         self._mock_call(specific_data, "get", _ErrorType.ERROR_INCORRECT, logmsg)
 
     def test__requests_unknown_method(self):
         """Test for specifying a method that does not exist in the requests module."""
-        logmsg = "Invalid method 'gett' specified."
+        logmsg = ["Invalid method 'gett' specified.", "AttributeError"]
         self._mock_call(_DEFAULT_SPECIFIC_DATA, "gett", _ErrorType.ERROR_INTERNAL, logmsg)
 
     def test__requests_invalid_schema(self):
         """Test for specifying an invalid schema in service_type."""
         specific_data = _DEFAULT_SPECIFIC_DATA.copy()
         specific_data["service_type"] = "@@@"
-        logmsg = "Invalid specific data error @@@://localhost:5555/: "
+        logmsg = ["Invalid specific data error @@@://localhost:5555/", "InvalidSchema"]
         self._mock_call(specific_data, "get", _ErrorType.ERROR_INCORRECT, logmsg)
 
     def test__requests_invalid_url(self):
         """Test for specifying an invalid host in service_host."""
         specific_data = _DEFAULT_SPECIFIC_DATA.copy()
         specific_data["service_host"] = "/"
-        logmsg = "Invalid specific data error http:///:5555/: "
+        logmsg = ["Invalid specific data error http:///:5555/", "InvalidURL"]
         self._mock_call(specific_data, "get", _ErrorType.ERROR_INCORRECT, logmsg)
 
     def test__requests_exception(self):
         """Test for cases where an exception is raised."""
         specific_data = _DEFAULT_SPECIFIC_DATA.copy()
         specific_data["timeout"] = 0.0001
-        logmsg = "Server error case "
+        # Either ReadTimeout or ConnectionError occurs.
+        logmsg = ["Server error case", "requests.exceptions"]
         self._mock_call(specific_data, "get", _ErrorType.ERROR_CONTROL, logmsg)
 
     def test__requests_normal(self):
@@ -203,7 +210,7 @@ class TestOtherMethods(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         # pylint: disable=protected-access
         self.req._request = mock.Mock()
         self.req._request.return_value = {}

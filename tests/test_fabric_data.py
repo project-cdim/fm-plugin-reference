@@ -19,7 +19,10 @@ Test program for _FabricData class
 import json
 from unittest import TestCase, mock
 from test_http_requests import _DEFAULT_SPECIFIC_DATA, _mock_response
-from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _FabricData, _HttpRequests
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _FabricData, _HTTPRequests
+
+
+_LOG_PREFIX = "WARNING:plugins.fm.reference.plugin:"
 
 
 class TestInit(TestCase):
@@ -27,24 +30,24 @@ class TestInit(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
 
     def test___init___normal(self):
         """Test for the initialization of instance variables."""
         fabric = _FabricData(self.req)
         self.assertIsInstance(fabric.err, _ErrorCtrl)
-        self.assertIsInstance(fabric.req, _HttpRequests)
+        self.assertIsInstance(fabric.req, _HTTPRequests)
         self.assertEqual([], fabric.uspids)
         self.assertEqual([], fabric.dspids)
         self.assertEqual([], fabric.swtids)
 
 
-class TestGetPortIds(TestCase):
+class TestGetPortIDs(TestCase):
     """Test class for get_port_ids method."""
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.fabric = _FabricData(req)
 
     def _save_port_ids(self):
@@ -83,12 +86,12 @@ class TestGetPortIds(TestCase):
         self.assertEqual(expected, self.fabric.get_port_ids())
 
 
-class TestGetSwitchIds(TestCase):
+class TestGetSwitchIDs(TestCase):
     """Test class for get_switch_ids method."""
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.fabric = _FabricData(req)
 
     def test_get_switch_ids_no_data(self):
@@ -105,28 +108,29 @@ class TestGetSwitchIds(TestCase):
         self.assertEqual(["SWITCH-4001", "SWITCH-4002"], self.fabric.get_switch_ids())
 
 
-class TestSaveAndGetPortIds(TestCase):
+class TestSaveAndGetPortIDs(TestCase):
     """Test class for save_and_get_port_ids method."""
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.fabric = _FabricData(req)
 
     def _mock_call(self, status_code, data, expected, logmsg=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, json.dumps(data))
-                resp = self.fabric.save_and_get_port_ids()
-                self.assertEqual(expected[0] + expected[1], resp)
-                self.assertEqual(expected[0], self.fabric.uspids)
-                self.assertEqual(expected[1], self.fabric.dspids)
-                if logmsg:
-                    log_func.assert_called_with(logmsg)
-                    self.assertEqual([_ErrorType.ERROR_CONTROL], self.fabric.err.error)
-                else:
-                    log_func.assert_not_called()
-                    self.assertEqual([], self.fabric.err.error)
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, json.dumps(data))
+            if logmsg:
+                with self.assertLogs(level="WARNING") as _cm:
+                    resp = self.fabric.save_and_get_port_ids()
+                self.assertEqual(_cm.output, [f"{_LOG_PREFIX}{logmsg}"])
+                self.assertEqual([_ErrorType.ERROR_CONTROL], self.fabric.err.error)
+            else:
+                with self.assertNoLogs(level="WARNING"):
+                    resp = self.fabric.save_and_get_port_ids()
+                self.assertEqual([], self.fabric.err.error)
+            self.assertEqual(expected[0] + expected[1], resp)
+            self.assertEqual(expected[0], self.fabric.uspids)
+            self.assertEqual(expected[1], self.fabric.dspids)
 
     def test_save_and_get_port_ids_blocks_is_none(self):
         """Test when the resource block schema cannot be retrieved."""
@@ -155,27 +159,28 @@ class TestSaveAndGetPortIds(TestCase):
         self._mock_call(200, {"Members": members}, (uspids, dspids))
 
 
-class TestSaveAndGetSwitchIds(TestCase):
+class TestSaveAndGetSwitchIDs(TestCase):
     """Test class for save_and_get_switch_ids method."""
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.fabric = _FabricData(req)
 
     def _mock_call(self, status_code, data, expected, logmsg=None):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, json.dumps(data))
-                resp = self.fabric.save_and_get_switch_ids()
-                self.assertEqual(expected, resp)
-                self.assertEqual(resp, self.fabric.swtids)
-                if logmsg:
-                    log_func.assert_called_with(logmsg)
-                    self.assertEqual([_ErrorType.ERROR_CONTROL], self.fabric.err.error)
-                else:
-                    log_func.assert_not_called()
-                    self.assertEqual([], self.fabric.err.error)
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, json.dumps(data))
+            if logmsg:
+                with self.assertLogs(level="WARNING") as _cm:
+                    resp = self.fabric.save_and_get_switch_ids()
+                self.assertEqual(_cm.output, [f"{_LOG_PREFIX}{logmsg}"])
+                self.assertEqual([_ErrorType.ERROR_CONTROL], self.fabric.err.error)
+            else:
+                with self.assertNoLogs(level="WARNING"):
+                    resp = self.fabric.save_and_get_switch_ids()
+                self.assertEqual([], self.fabric.err.error)
+            self.assertEqual(expected, resp)
+            self.assertEqual(resp, self.fabric.swtids)
 
     def test_save_and_get_switch_ids_switches_is_none(self):
         """Test when the switch cannot be retrieved."""
@@ -223,17 +228,16 @@ class TestStaticMethods(TestCase):
     def test_odata2id_not_found(self):
         """Test for odata2id method (not found)."""
         err = _ErrorCtrl()
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
+        with self.assertLogs(level="WARNING") as _cm:
             data = _FabricData.odata2id({"not@odata.id": "System/System-1"}, err)
             self.assertIsNone(data)
-            log_func.assert_called_with("Invalid format {'not@odata.id': 'System/System-1'}")
+            self.assertEqual(_cm.output, [_LOG_PREFIX + "Invalid format {'not@odata.id': 'System/System-1'}"])
         self.assertEqual([_ErrorType.ERROR_CONTROL], err.error)
 
     def test_odata2id_normal(self):
         """Test for odata2id method (found)."""
         err = _ErrorCtrl()
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
+        with self.assertNoLogs(level="WARNING"):
             data = _FabricData.odata2id({"@odata.id": "System/System-1"}, err)
             self.assertEqual(data, "System-1")
-            log_func.assert_not_called()
         self.assertEqual([], err.error)

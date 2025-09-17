@@ -12,11 +12,11 @@
 # License for the specific language governing permissions and limitations
 #  under the License.
 
-"""A module defining an FM plugin to work with the reference simulator.
-"""
+"""A module defining an FM plugin to work with the reference simulator."""
 
 import enum
 import json
+import logging
 import threading
 import typing
 import typing_extensions
@@ -24,9 +24,10 @@ import pydantic
 import requests
 
 import app.common.basic_exceptions as exc
-from app.common.utils.fm_plugin_base import FMPluginBase, FmPortData, FmSwitchData
-from app.common.utils.log import LOGGER as log
-from app.common.messages import message as msg
+from app.common.utils.fm_plugin_base import FMPluginBase, FMPortData, FMSwitchData
+
+
+logger = logging.getLogger(__name__)
 
 
 class _ErrorType(enum.IntEnum):
@@ -34,35 +35,17 @@ class _ErrorType(enum.IntEnum):
 
     Attributes:
         ERROR_INTERNAL: Internal error within this FM plugin.
-           Raise a InternalHwControlError.
+           Raise a InternalHWControlError.
         ERROR_INCORRECT: The content of the plugin configuration (file)
-           is invalid. Raise a ConfigurationHwControlError.
+           is invalid. Raise a ConfigurationHWControlError.
         ERROR_CONTROL: The state of the reference Redfish simulator is
            different from what is expected.
-           Raise a ConfigurationHwControlError.
+           Raise a ConfigurationHWControlError.
     """
+
     ERROR_INTERNAL = enum.auto()
     ERROR_INCORRECT = enum.auto()
     ERROR_CONTROL = enum.auto()
-
-
-def _debug(out: str):
-    """Output log messages at the debug level.
-
-    This is an internal function for debug logging.
-
-    Args:
-        out (str): The string you want to output in the log.
-
-    Returns:
-        None
-
-    Raises:
-        None
-
-    """
-
-    log.debug(str(msg.BaseLogMessage(detail=out).to_json_encodable()), False)
 
 
 def _get_value_from_data(data: dict, key: str, types: tuple, default=None) -> typing.Any:
@@ -152,7 +135,7 @@ def _norm_byte(data: str | None, byte: int) -> str | None:
 
 
 def _classcode(data: str | None) -> dict[str, int] | None:
-    """Convert the string into a pci_class_code of FmPortData.
+    """Convert the string into a pci_class_code of FMPortData.
 
     This is an internal function that converts a string into the
     pci_class_code format for returning in the FM plugin's
@@ -162,7 +145,7 @@ def _classcode(data: str | None) -> dict[str, int] | None:
         data (str | None): 6-byte hexadecimal string.
 
     Returns:
-        pci_class_code of FmPortData class
+        pci_class_code of FMPortData class
 
     Raises:
         None
@@ -181,7 +164,7 @@ class _ErrorCtrl:
     immediately raising them.
 
     Attributes:
-        _exceptions (dict[_ErrorType, BaseHwControlError]): A class
+        _exceptions (dict[_ErrorType, BaseHWControlError]): A class
             variable that defines a dictionary-type data mapping
             _ErrorType to exceptions defined by HW control.
         error (list[_ErrorType]): A list-type instance variable that
@@ -189,9 +172,9 @@ class _ErrorCtrl:
     """
 
     _exceptions = {
-        _ErrorType.ERROR_INCORRECT: exc.ConfigurationHwControlError,
-        _ErrorType.ERROR_CONTROL: exc.ControlObjectHwControlError,
-        _ErrorType.ERROR_INTERNAL: exc.InternalHwControlError,
+        _ErrorType.ERROR_INCORRECT: exc.ConfigurationHWControlError,
+        _ErrorType.ERROR_CONTROL: exc.ControlObjectHWControlError,
+        _ErrorType.ERROR_INTERNAL: exc.InternalHWControlError,
     }
 
     def __init__(self):
@@ -217,16 +200,16 @@ class _ErrorCtrl:
 
         When multiple errors have been added, return them in the
         following order.
-          - ConfigurationHwControlError
-          - ControlObjectHwControlError
-          - InternalHwControlError
-        If no errors are set, return InternalHwControlError.
+          - ConfigurationHWControlError
+          - ControlObjectHWControlError
+          - InternalHWControlError
+        If no errors are set, return InternalHWControlError.
 
         Args:
             None
 
         Returns:
-            An exception class that inherits from BaseHwControlError.
+            An exception class that inherits from BaseHWControlError.
 
         Raises:
             None
@@ -237,7 +220,7 @@ class _ErrorCtrl:
         return self._exceptions[_ErrorType.ERROR_INTERNAL]
 
 
-class _HttpRequests:
+class _HTTPRequests:
     """Communicating using the HTTP protocol.
 
     An internal class that requests get/patch operations to the target
@@ -268,7 +251,7 @@ class _HttpRequests:
     root = None
 
     def __init__(self, specific_data: dict | None, err: _ErrorCtrl):
-        """Constructor of the _HttpRequests class.
+        """Constructor of the _HTTPRequests class.
 
         Parse specific_data and set the instance variables.
 
@@ -289,7 +272,7 @@ class _HttpRequests:
         if schema and host and port:
             self.url = f"{schema}://{host}:{str(port)}"
         if self.url is None or self.root is None:
-            log.warning(f"Invalid specific_data. {schema}, {host}, {port}, {self.root}")
+            logger.warning("Invalid specific_data. %s, %s, %s, %s", schema, host, port, self.root)
             err.put(_ErrorType.ERROR_INCORRECT)
 
     def _check_response(self, response: requests.Response) -> dict | None:
@@ -311,17 +294,17 @@ class _HttpRequests:
             None
         """
         if response.status_code >= 500:
-            log.warning(f"Server error case response status code is {response.status_code}")
+            logger.warning("Server error case response status code is %d", response.status_code)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return None
         if response.status_code != 200:
-            log.warning(f"Internal error case response status code is {response.status_code}")
+            logger.warning("Internal error case response status code is %d", response.status_code)
             self.err.put(_ErrorType.ERROR_INTERNAL)
             return None
         try:
             return json.loads(response.text)
         except (json.JSONDecodeError, KeyError):
-            log.warning(f"Invalid response text '{response.text}'")
+            logger.warning("Invalid response text '%s'", response.text, exc_info=True)
             self.err.put(_ErrorType.ERROR_CONTROL)
         return None
 
@@ -346,7 +329,7 @@ class _HttpRequests:
             None
 
         """
-        _debug(f"entry: _request({method}, {path}, {data})")
+        logger.debug("entry: _request(%s, %s, %s)", method, path, data)
         if self.url is None:
             return None
         url = f"{self.url}/{path}"
@@ -355,18 +338,15 @@ class _HttpRequests:
             func = getattr(requests, method)
             response = func(url, headers=header, data=data, timeout=self.timeout)
         except AttributeError:
-            log.warning(f"Invalid method '{method}' specified.")
+            logger.warning("Invalid method '%s' specified.", method, exc_info=True)
             self.err.put(_ErrorType.ERROR_INTERNAL)
             return None
-        except (
-            requests.exceptions.InvalidURL,
-            requests.exceptions.InvalidSchema,
-        ) as err:
-            log.warning(f"Invalid specific data error {url}: {err}")
+        except (requests.exceptions.InvalidURL, requests.exceptions.InvalidSchema):
+            logger.warning("Invalid specific data error %s", url, exc_info=True)
             self.err.put(_ErrorType.ERROR_INCORRECT)
             return None
-        except requests.exceptions.RequestException as err:
-            log.warning(f"Server error case {err.__class__.__name__}: {err}")
+        except requests.exceptions.RequestException:
+            logger.warning("Server error case", exc_info=True)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return None
 
@@ -435,34 +415,34 @@ class _SwitchData:
     """Manage switch information.
 
     An internal class to obtain information from the Redfish simulator
-    and store it in FmSwitchData.
+    and store it in FMSwitchData.
     It has the following instance variables.
 
     Attributes:
-        req (_HttpRequests): A reference pointer to an instance of
-            _HttpRequests.
+        req (_HTTPRequests): A reference pointer to an instance of
+            _HTTPRequests.
         err (_ErrorCtrl): A reference pointer to an instance of
             _ErrorCtrl.
         sid (str): switch ID.
-        switch (FmSwitchData): A instance of FmSwitchData.
+        switch (FMSwitchData): A instance of FMSwitchData.
     """
 
-    def __init__(self, sid: str, req: _HttpRequests):
+    def __init__(self, sid: str, req: _HTTPRequests):
         """Constructor of the _SwitchData class.
 
-        Create an instance of the FmSwitchData class by specifying the
+        Create an instance of the FMSwitchData class by specifying the
         switch ID.
 
         Args:
             sid (str): Switch ID of the switch to retrieve information
                 from.
-            req (_HttpRequests): A reference pointer to an instance of
-                _HttpRequests
+            req (_HTTPRequests): A reference pointer to an instance of
+                _HTTPRequests
         """
         self.req = req
         self.err = req.err
         self.sid = sid
-        self.switch = FmSwitchData(
+        self.switch = FMSwitchData(
             switchId=sid,
             switchManufacturer=None,
             switchModel=None,
@@ -471,7 +451,7 @@ class _SwitchData:
         )
 
     def save_switch_data(self) -> None:
-        """Retrieve the switch information and store it in FmSwitchData.
+        """Retrieve the switch information and store it in FMSwitchData.
 
         Args:
             None
@@ -491,10 +471,10 @@ class _SwitchData:
             self.switch.switch_serial_number = switch.get("SerialNumber")
         except pydantic.ValidationError:
             self.err.put(_ErrorType.ERROR_INTERNAL)
-            log.warning(f"Validation error {switch}")
+            logger.warning("Validation error %s", switch, exc_info=True)
 
     def save_switch_link(self, link: list) -> None:
-        """Store the link information in FmSwitchData.
+        """Store the link information in FMSwitchData.
 
         Args:
             link (list): List of all switch IDs.
@@ -507,14 +487,14 @@ class _SwitchData:
         """
         self.switch.link = [x for x in link if x != self.sid]
 
-    def get_switch_data(self) -> FmSwitchData:
-        """Return the stored FmSwitchData.
+    def get_switch_data(self) -> FMSwitchData:
+        """Return the stored FMSwitchData.
 
         Args:
             None
 
         Returns:
-            Stored FmSwitchData.
+            Stored FMSwitchData.
 
         Raises:
             None
@@ -526,40 +506,41 @@ class _PortData:
     """Manage port information.
 
     An internal class to obtain information from the Redfish simulator
-    and store it in FmPortData.
+    and store it in FMPortData.
     It has the following instance variables.
 
     Attributes:
-        req (_HttpRequests): A reference pointer to an instance of
-            _HttpRequests.
+        req (_HTTPRequests): A reference pointer to an instance of
+            _HTTPRequests.
         err (_ErrorCtrl): A reference pointer to an instance of
             _ErrorCtrl.
         pid (str): FM port ID.
         port_type (Literal["USP", "DSP"] | None): Value to be set in
-            switch_port_type of FmPortData.
-        port (FmPortData): An instance of FmPortData.
+            switch_port_type of FMPortData.
+        port (FMPortData): An instance of FMPortData.
         zone (str | None): The ID of the resource zone to which the
             resource block corresponding to the port belongs.
     """
+
     zone: str | None = None
     port_type: typing.Literal["USP", "DSP"] | None = None
 
-    def __init__(self, pid: str, req: _HttpRequests):
+    def __init__(self, pid: str, req: _HTTPRequests):
         """Constructor of the _PortData class.
 
-        Create an instance of the FmPortData class by specifying the
+        Create an instance of the FMPortData class by specifying the
         FM port ID.
 
         Args:
             pid (str): FM port ID of the port to retrieve information
                 from.
-            req (_HttpRequests): A reference pointer to an instance of
-                _HttpRequests
+            req (_HTTPRequests): A reference pointer to an instance of
+                _HTTPRequests
         """
         self.req = req
         self.err = req.err
         self.pid = pid
-        self.port = FmPortData(
+        self.port = FMPortData(
             id=self.pid,
             switchPortType=self.port_type,
             switchId=None,
@@ -581,7 +562,7 @@ class _PortData:
         )
 
     def save_switch_data(self, swt: _SwitchData) -> None:
-        """Store the switch_id and fabric_id in FmPortData.
+        """Store the switch_id and fabric_id in FMPortData.
 
         Args:
             swt (_SwitchData): A reference pointer to an instance of
@@ -602,7 +583,7 @@ class _PortData:
                 self.port.fabric_id = f"{manufact}-{model}-{serial}-{self.zone}"
         except pydantic.ValidationError:
             self.err.put(_ErrorType.ERROR_INTERNAL)
-            log.warning(f"Validation error {swt.sid}")
+            logger.warning("Validation error %s", swt.sid, exc_info=True)
 
     def save_zone(self, rbdata: dict) -> None:
         """Store the zone instance variable.
@@ -621,7 +602,7 @@ class _PortData:
             self.zone = _FabricData.odata2id(zones[0], self.err)
 
     def save_link(self, ids: list) -> None:
-        """Store the link information in FmPortData.
+        """Store the link information in FMPortData.
 
         Args:
             ids (list): List of all FM port IDs.
@@ -634,7 +615,7 @@ class _PortData:
         """
 
     def save_port_data(self) -> None:
-        """Retrieve the port information and store it in FmPortData.
+        """Retrieve the port information and store it in FMPortData.
 
         Args:
             None
@@ -646,14 +627,14 @@ class _PortData:
             None
         """
 
-    def get_port_data(self) -> FmPortData:
-        """Return the stored FmPortData.
+    def get_port_data(self) -> FMPortData:
+        """Return the stored FMPortData.
 
         Args:
             None
 
         Returns:
-            Stored FmPortData.
+            Stored FMPortData.
 
         Raises:
             None
@@ -673,7 +654,7 @@ class _PortDataUSP(_PortData):
 
     port_type: typing.Literal["USP", "DSP"] | None = "USP"
 
-    def __init__(self, pid: str, req: _HttpRequests):
+    def __init__(self, pid: str, req: _HTTPRequests):
         """Constructor of the _PortDataUSP class.
 
         Execute the constructor of the parent class and retrieve the
@@ -682,8 +663,8 @@ class _PortDataUSP(_PortData):
         Args:
             pid (str): FM port ID of the port to retrieve information
                 from.
-            req (_HttpRequests): A reference pointer to an instance of
-                _HttpRequests
+            req (_HTTPRequests): A reference pointer to an instance of
+                _HTTPRequests
         """
         super().__init__(pid, req)
         self.syspath = _FabricData.uspid2system(pid)
@@ -715,7 +696,7 @@ class _PortDataUSP(_PortData):
             devdata = self.req.get(devpath)
             if devdata and devdata.get("ProcessorType") == "CPU":
                 return devdata
-        log.warning(f"{self.pid} usp processor not found\n{rbdata}")
+        logger.warning("%s usp processor not found\n%s", self.pid, rbdata)
         self.err.put(_ErrorType.ERROR_CONTROL)
         return None
 
@@ -732,7 +713,7 @@ class _PortDataUSP(_PortData):
             if blkid is None:
                 return
             if blkid not in ids:
-                log.warning(f"Invalid resource block {blkid} not in {ids}")
+                logger.warning("Invalid resource block %s not in %s", blkid, ids)
                 self.err.put(_ErrorType.ERROR_CONTROL)
                 return
 
@@ -753,7 +734,7 @@ class _PortDataUSP(_PortData):
             self.port.cpu_serial_number = cpu_data.get("SerialNumber")
         except pydantic.ValidationError:
             self.err.put(_ErrorType.ERROR_INTERNAL)
-            log.warning(f"Validation error {cpu_data}")
+            logger.warning("Validation error %s", cpu_data, exc_info=True)
 
     def change_link(self, blkids: list) -> bool:
         """Request a configuration change to the simulator.
@@ -814,7 +795,7 @@ class _PortDataDSP(_PortData):
             for dev in rbdata.get(devtype, []):
                 found.append(dev.get("@odata.id"))
         if len(found) != 1:
-            log.warning(f"{self.pid} dsp target device count is {(len(found))}\n{rbdata}")
+            logger.warning("%s dsp target device count is %d\n%s", self.pid, len(found), rbdata)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return None
         return found[0]
@@ -833,13 +814,13 @@ class _PortDataDSP(_PortData):
                 return
             blkid = _FabricData.system2uspid(sysid)
             if blkid not in ids:
-                log.warning(f"Invalid resource block {blkid} not in {ids}")
+                logger.warning("Invalid resource block %s not in %s", blkid, ids)
                 self.err.put(_ErrorType.ERROR_CONTROL)
                 return
             links.append(blkid)
 
         if len(links) > 1:
-            log.warning(f"{self.pid} dsp link failed\n{rbdata}")
+            logger.warning("%s dsp link failed\n%s", self.pid, rbdata)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return
         self.port.link = links
@@ -871,11 +852,11 @@ class _PortDataDSP(_PortData):
         self.port.pci_class_code = _classcode(pciefunc.get("ClassCode"))
 
     def _save_port_data_memory(self, devpath: str) -> None:
-        """Retrieve the memory information and store it in FmPortData.
+        """Retrieve the memory information and store it in FMPortData.
 
         An internal method that retrieves the memory schema of the
         specified path and stores it in the capacity and device_keys of
-        FmPortData.
+        FMPortData.
 
         Args:
             The full path of the memory schema.
@@ -911,22 +892,23 @@ class _FabricData:
     port IDs and switch IDs.
 
     Attributes:
-        req (_HttpRequests): A reference pointer to an instance of
-            _HttpRequests.
+        req (_HTTPRequests): A reference pointer to an instance of
+            _HTTPRequests.
         err (_ErrorCtrl): A reference pointer to an instance of
             _ErrorCtrl.
         uspids (list): The list of FM port IDs on the USP side.
         dspids (list): The list of FM port IDs on the DSP side.
         swtids (list): The list of switch IDs.
     """
-    def __init__(self, req: _HttpRequests):
+
+    def __init__(self, req: _HTTPRequests):
         """Constructor of the _FabricData class.
 
         Store instance variables and initialize the list.
 
         Args:
-            req (_HttpRequests): A reference pointer to an instance of
-                _HttpRequests
+            req (_HTTPRequests): A reference pointer to an instance of
+                _HTTPRequests
         """
         self.err = req.err
         self.req = req
@@ -1011,7 +993,7 @@ class _FabricData:
         """
         odata = member.get("@odata.id")
         if odata is None:
-            log.warning(f"Invalid format {member}")
+            logger.warning("Invalid format %s", member)
             err.put(_ErrorType.ERROR_CONTROL)
             return None
         return odata.split("/")[-1]
@@ -1068,7 +1050,7 @@ class _FabricData:
         Raises:
             None
         """
-        _debug("entry: save_port_ids")
+        logger.debug("entry: save_port_ids")
         uspids = []
         dspids = []
         blocks = self.req.get("CompositionService/ResourceBlocks", True)
@@ -1083,7 +1065,7 @@ class _FabricData:
                 else:
                     dspids.append(blkid)
         if len(uspids + dspids) == 0:
-            log.warning(f"No resource block found from ResourceBlocks\n{blocks}")
+            logger.warning("No resource block found from ResourceBlocks\n%s", blocks)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return []
         self.uspids = uspids
@@ -1103,7 +1085,7 @@ class _FabricData:
         Raises:
             None
         """
-        _debug("entry: save_switch_ids")
+        logger.debug("entry: save_switch_ids")
         swtids = []
         switches = self.req.get("Fabrics/CXL/Switches", True)
         if switches is None:
@@ -1114,18 +1096,18 @@ class _FabricData:
             if swtid:
                 swtids.append(swtid)
         if len(swtids) == 0:
-            log.warning(f"No switch found from Switches\n{switches}")
+            logger.warning("No switch found from Switches\n%s", switches)
             self.err.put(_ErrorType.ERROR_CONTROL)
             return []
         self.swtids = swtids
         return swtids
 
 
-class FmPlugin(FMPluginBase):
+class FMPlugin(FMPluginBase):
     """Fabric Manager plugin class for use reference redfish simulator.
 
     Class Name:
-        FmPlugin
+        FMPlugin
 
     Attributes:
         _link_lock (_thread.lock): A class variable for a lock to
@@ -1138,8 +1120,8 @@ class FmPlugin(FMPluginBase):
                 or disconnecting.
         err (_ErrorCtrl): An instance variable to store the _ErrorCtrl
             instance.
-        req (_HttpRequests): An instance variable to store the
-            _HttpRequests instance.
+        req (_HTTPRequests): An instance variable to store the
+            _HTTPRequests instance.
         fabric (_FabricData): An instance variable to store the
             _FabricData instance.
     """
@@ -1147,9 +1129,9 @@ class FmPlugin(FMPluginBase):
     _link_lock = threading.Lock()
 
     def __init__(self, specific_data: dict | None = None):
-        """Constructor of the FmPlugin class.
+        """Constructor of the FMPlugin class.
 
-        Create instances of the _ErrorCtrl class, _HttpRequests class,
+        Create instances of the _ErrorCtrl class, _HTTPRequests class,
         and _FabricData class.
 
         Args:
@@ -1164,11 +1146,11 @@ class FmPlugin(FMPluginBase):
         """
         super().__init__(specific_data)
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(specific_data, self.err)
+        self.req = _HTTPRequests(specific_data, self.err)
         self.fabric = _FabricData(self.req)
 
     def _get_port_data(self, pid: str, swt: _SwitchData) -> _PortData:
-        """Retrieval of FmPortData other than links.
+        """Retrieval of FMPortData other than links.
 
         An internal method to create an instance of _PortData and store
         port information other than the link.
@@ -1185,7 +1167,7 @@ class FmPlugin(FMPluginBase):
         Raises:
             None
         """
-        _debug("entry: _get_port_data")
+        logger.debug("entry: _get_port_data")
         port: _PortData
         if self.fabric.port_is_usp(pid):
             port = _PortDataUSP(pid, self.req)
@@ -1196,7 +1178,7 @@ class FmPlugin(FMPluginBase):
         return port
 
     def _get_switch_data(self, sid: str, swtids: list) -> _SwitchData:
-        """Retrieval of FmSwitchData.
+        """Retrieval of FMSwitchData.
 
         An internal method to create an instance of SwitchData and
         store switch information.
@@ -1212,7 +1194,7 @@ class FmPlugin(FMPluginBase):
         Raises:
             None
         """
-        _debug("entry: _get_switch_data")
+        logger.debug("entry: _get_switch_data")
         swt = _SwitchData(sid, self.req)
         swt.save_switch_data()
         swt.save_switch_link(swtids)
@@ -1235,34 +1217,33 @@ class FmPlugin(FMPluginBase):
         Raises:
             Following exception defined in the
             app.common.basic_exceptions module:
-            HostCpuNotFoundHwControlError:
+            HostCPUNotFoundHWControlError:
                 The specified cpu_id is not found in data.
-            DeviceNotFoundHwControlError:
+            DeviceNotFoundHWControlError:
                 The specified device_id is not found in data.
-            HostCpuAndDeviceNotFoundHwControlError:
+            HostCPUAndDeviceNotFoundHWControlError:
                 Both cpu_id and device_id is not found in data.
-            ConfigurationHwControlError:
+            ConfigurationHWControlError:
                 The 'specific_data' instance variable is incorrect.
-            ControlObjectHwControlError:
+            ControlObjectHWControlError:
                 The simulator response is unexpected, and so on.
-            InternalHwControlError:
+            InternalHWControlError:
                 Detected an inconsistency in the internal processing.
         """
         if len(self.fabric.save_and_get_port_ids()) == 0:
             raise self.err.get()
-        if (uid not in self.fabric.get_port_ids("USP") and
-                did not in self.fabric.get_port_ids("DSP")):
-            raise exc.HostCpuAndDeviceNotFoundHwControlError
+        if uid not in self.fabric.get_port_ids("USP") and did not in self.fabric.get_port_ids("DSP"):
+            raise exc.HostCPUAndDeviceNotFoundHWControlError
         if uid not in self.fabric.get_port_ids("USP"):
-            raise exc.HostCpuNotFoundHwControlError
+            raise exc.HostCPUNotFoundHWControlError
         if did not in self.fabric.get_port_ids("DSP"):
-            raise exc.DeviceNotFoundHwControlError
+            raise exc.DeviceNotFoundHWControlError
 
         usp = _PortDataUSP(uid, self.req)
         dsp = _PortDataDSP(did, self.req)
         return usp, dsp
 
-    def get_port_info(self, target_id: typing.Optional[str] = None) -> dict:
+    def get_port_info(self, target_id: typing.Optional[str] = None) -> dict[str, list[FMPortData]]:
         """Get port information.
 
         Method Name:
@@ -1275,7 +1256,7 @@ class FmPlugin(FMPluginBase):
 
         Returns:
             A dictionary-type data with the "data" key.
-            The value of the "data" key is a list of FmPortData class
+            The value of the "data" key is a list of FMPortData class
             instances.
             If an argument is specified, the list contains only one
             specified port.
@@ -1285,13 +1266,13 @@ class FmPlugin(FMPluginBase):
         Raises:
             Following exception defined in the
             app.common.basic_exceptions module:
-            ResourceNotFoundHwControlError:
+            ResourceNotFoundHWControlError:
                 The specified target_id is not found in data.
-            ConfigurationHwControlError:
+            ConfigurationHWControlError:
                 The 'specific_data' instance variable is incorrect.
-            ControlObjectHwControlError:
+            ControlObjectHWControlError:
                 The simulator response is unexpected, and so on.
-            InternalHwControlError:
+            InternalHWControlError:
                 Detected an inconsistency in the internal processing.
         """
         prtids = self.fabric.save_and_get_port_ids()
@@ -1304,7 +1285,7 @@ class FmPlugin(FMPluginBase):
         swt = self._get_switch_data(swtids[0], swtids)
         if target_id:
             if target_id not in prtids:
-                raise exc.ResourceNotFoundHwControlError
+                raise exc.ResourceNotFoundHWControlError
 
             port = self._get_port_data(target_id, swt)
 
@@ -1316,13 +1297,13 @@ class FmPlugin(FMPluginBase):
             return {"data": [port.get_port_data()]}
 
         ports = [self._get_port_data(p, swt) for p in prtids]
-        with FmPlugin._link_lock:
+        with FMPlugin._link_lock:
             for port in ports:
                 port.save_link(prtids)
 
         return {"data": [p.get_port_data() for p in ports]}
 
-    def get_switch_info(self, switch_id: typing.Optional[str] = None) -> dict:
+    def get_switch_info(self, switch_id: typing.Optional[str] = None) -> dict[str, list[FMSwitchData]]:
         """Get switch information.
 
         Method Name:
@@ -1335,7 +1316,7 @@ class FmPlugin(FMPluginBase):
 
         Returns:
             A dictionary-type data with the "data" key.
-            The value of the "data" key is a list of FmPortData class
+            The value of the "data" key is a list of FMPortData class
             instances.
             If an argument is specified, the list contains only one
             specified switch.
@@ -1345,13 +1326,13 @@ class FmPlugin(FMPluginBase):
         Raises:
             Following exception defined in the
             app.common.basic_exceptions module:
-            SwitchNotFoundHwControlError:
+            SwitchNotFoundHWControlError:
                 The specified switch_id is not found in data.
-            ConfigurationHwControlError:
+            ConfigurationHWControlError:
                 The 'specific_data' instance variable is incorrect.
-            ControlObjectHwControlError:
+            ControlObjectHWControlError:
                 The simulator response is unexpected, and so on.
-            InternalHwControlError:
+            InternalHWControlError:
                 Detected an inconsistency in the internal processing.
         """
         swtids = self.fabric.save_and_get_switch_ids()
@@ -1360,7 +1341,7 @@ class FmPlugin(FMPluginBase):
 
         if switch_id:
             if switch_id not in swtids:
-                raise exc.SwitchNotFoundHwControlError
+                raise exc.SwitchNotFoundHWControlError
 
             swt = self._get_switch_data(switch_id, swtids)
             return {"data": [swt.get_switch_data()]}
@@ -1385,26 +1366,26 @@ class FmPlugin(FMPluginBase):
         Raises:
             Following exception defined in the
             app.common.basic_exceptions module:
-            HostCpuNotFoundHwControlError:
+            HostCPUNotFoundHWControlError:
                 The specified cpu_id is not found in data.
-            DeviceNotFoundHwControlError:
+            DeviceNotFoundHWControlError:
                 The specified device_id is not found in data.
-            HostCpuAndDeviceNotFoundHwControlError:
+            HostCPUAndDeviceNotFoundHWControlError:
                 Both cpu_id and device_id is not found in data.
-            RequestConflictHwControlError:
+            RequestConflictHWControlError:
                 The specified device_id is connected to another cpu_id.
-            ConfigurationHwControlError:
+            ConfigurationHWControlError:
                 The 'specific_data' instance variable is incorrect.
-            ControlObjectHwControlError:
+            ControlObjectHWControlError:
                 The simulator response is unexpected, and so on.
-            FmConnectFailureHwControlError:
+            FMConnectFailureHWControlError:
                 The request to connect to the simulator failed.
-            InternalHwControlError:
+            InternalHWControlError:
                 Detected an inconsistency in the internal processing.
         """
         usp, dsp = self._setup_control(cpu_id, device_id)
 
-        with FmPlugin._link_lock:
+        with FMPlugin._link_lock:
             usp.save_link(self.fabric.get_port_ids())
             dsp.save_link(self.fabric.get_port_ids())
             usplink = usp.get_port_data().link
@@ -1416,11 +1397,11 @@ class FmPlugin(FMPluginBase):
                 return
             if dsplink:
                 _msg = f"connect: device_id {device_id} linked {dsplink}"
-                raise exc.RequestConflictHwControlError(additional_message=_msg)
+                raise exc.RequestConflictHWControlError(additional_message=_msg)
 
             resp = usp.change_link([dsp.pid] + usplink)
             if not resp:
-                raise exc.FmConnectFailureHwControlError
+                raise exc.FMConnectFailureHWControlError
         return
 
     def disconnect(self, cpu_id: str, device_id: str) -> None:
@@ -1440,26 +1421,26 @@ class FmPlugin(FMPluginBase):
         Raises:
             Following exception defined in the
             app.common.basic_exceptions module:
-            HostCpuNotFoundHwControlError:
+            HostCPUNotFoundHWControlError:
                 The specified cpu_id is not found in data.
-            DeviceNotFoundHwControlError:
+            DeviceNotFoundHWControlError:
                 The specified device_id is not found in data.
-            HostCpuAndDeviceNotFoundHwControlError
+            HostCPUAndDeviceNotFoundHWControlError
                 Both cpu_id and device_id is not found in data.
-            RequestConflictHwControlError:
+            RequestConflictHWControlError:
                 The specified device_id is connected to another cpu_id.
-            ConfigurationHwControlError:
+            ConfigurationHWControlError:
                 The 'specific_data' instance variable is incorrect.
-            ControlObjectHwControlError:
+            ControlObjectHWControlError:
                 The simulator response is unexpected, and so on.
-            FmDisconnectFailureHwControlError:
+            FMDisconnectFailureHWControlError:
                 The request to disconnect to the simulator failed.
-            InternalHwControlError:
+            InternalHWControlError:
                 Detected an inconsistency in the internal processing.
         """
         usp, dsp = self._setup_control(cpu_id, device_id)
 
-        with FmPlugin._link_lock:
+        with FMPlugin._link_lock:
             usp.save_link(self.fabric.get_port_ids())
             dsp.save_link(self.fabric.get_port_ids())
             usplink = usp.get_port_data().link
@@ -1472,10 +1453,10 @@ class FmPlugin(FMPluginBase):
 
             if dsp.pid not in usplink:
                 _msg = f"disconnect: device_id {device_id} linked {dsplink}"
-                raise exc.RequestConflictHwControlError(additional_message=_msg)
+                raise exc.RequestConflictHWControlError(additional_message=_msg)
 
             links = [pid for pid in usplink if dsp.pid != pid]
             resp = usp.change_link(links)
             if not resp:
-                raise exc.FmDisconnectFailureHwControlError
+                raise exc.FMDisconnectFailureHWControlError
         return

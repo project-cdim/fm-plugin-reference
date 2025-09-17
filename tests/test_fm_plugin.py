@@ -13,15 +13,15 @@
 #  under the License.
 
 """
-Test program for FmPlugin class
+Test program for FMPlugin class
 """
 
 import typing
 from unittest import TestCase, mock
 import app.common.basic_exceptions as exc
-from app.common.utils.fm_plugin_base import FmPortData, FmSwitchData
+from app.common.utils.fm_plugin_base import FMPortData, FMSwitchData
 from test_http_requests import _DEFAULT_SPECIFIC_DATA
-from plugins.fm.reference.plugin import _ErrorCtrl, _FabricData, _HttpRequests, FmPlugin
+from plugins.fm.reference.plugin import _ErrorCtrl, _FabricData, _HTTPRequests, FMPlugin
 
 
 class TestInit(TestCase):
@@ -29,13 +29,13 @@ class TestInit(TestCase):
 
     def setUp(self):
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(None, self.err)
+        self.req = _HTTPRequests(None, self.err)
 
     def test___init___normal(self):
         """Test for the initialization of instance variables."""
-        fmp = FmPlugin()
+        fmp = FMPlugin()
         self.assertIsInstance(fmp.err, _ErrorCtrl)
-        self.assertIsInstance(fmp.req, _HttpRequests)
+        self.assertIsInstance(fmp.req, _HTTPRequests)
         self.assertIsInstance(fmp.fabric, _FabricData)
 
 
@@ -43,7 +43,7 @@ class TestGetPortInfo(TestCase):
     """Test class for get_port_info method."""
 
     def setUp(self):
-        self.fmp = FmPlugin(_DEFAULT_SPECIFIC_DATA)
+        self.fmp = FMPlugin(_DEFAULT_SPECIFIC_DATA)
         self.fmp.fabric = mock.Mock()
         self.fmp.fabric.save_and_get_port_ids.return_value = ["ComputeBlock-1", "DeviceBlock-2"]
         self.fmp.fabric.save_and_get_switch_ids.return_value = ["SWITCH-4001"]
@@ -53,19 +53,19 @@ class TestGetPortInfo(TestCase):
         """Test when no port ids are found."""
         assert isinstance(self.fmp.fabric.save_and_get_port_ids, mock.Mock)
         self.fmp.fabric.save_and_get_port_ids.return_value = []
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.get_port_info()
 
     def test_get_port_info_switch_ids_not_found(self):
         """Test when no switch ids are found."""
         assert isinstance(self.fmp.fabric.save_and_get_switch_ids, mock.Mock)
         self.fmp.fabric.save_and_get_switch_ids.return_value = []
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.get_port_info()
 
     def test_get_port_info_target_id_not_found(self):
         """Test when the specified target_id does not exist."""
-        with self.assertRaises(exc.ResourceNotFoundHwControlError):
+        with self.assertRaises(exc.ResourceNotFoundHWControlError):
             self.fmp.get_port_info("Block-3")
 
     def test_get_port_info_target_id_is_usp(self):
@@ -74,7 +74,7 @@ class TestGetPortInfo(TestCase):
         self.assertEqual(1, len(data))
         self.assertIsInstance(data["data"], list)
         self.assertEqual(1, len(data["data"]))
-        self.assertIsInstance(data["data"][0], FmPortData)
+        self.assertIsInstance(data["data"][0], FMPortData)
         self.assertEqual("ComputeBlock-1", data["data"][0].id)
         self.assertEqual("USP", data["data"][0].switch_port_type)
 
@@ -84,7 +84,7 @@ class TestGetPortInfo(TestCase):
         self.assertEqual(1, len(data))
         self.assertIsInstance(data["data"], list)
         self.assertEqual(1, len(data["data"]))
-        self.assertIsInstance(data["data"][0], FmPortData)
+        self.assertIsInstance(data["data"][0], FMPortData)
         self.assertEqual("DeviceBlock-2", data["data"][0].id)
         self.assertEqual("DSP", data["data"][0].switch_port_type)
 
@@ -94,8 +94,8 @@ class TestGetPortInfo(TestCase):
         self.assertEqual(1, len(data))
         self.assertIsInstance(data["data"], list)
         self.assertEqual(2, len(data["data"]))
-        self.assertIsInstance(data["data"][0], FmPortData)
-        self.assertIsInstance(data["data"][1], FmPortData)
+        self.assertIsInstance(data["data"][0], FMPortData)
+        self.assertIsInstance(data["data"][1], FMPortData)
         self.assertEqual("ComputeBlock-1", data["data"][0].id)
         self.assertEqual("DeviceBlock-2", data["data"][1].id)
 
@@ -104,7 +104,7 @@ class TestGetSwitchInfo(TestCase):
     """Test class for get_switch_info method."""
 
     def setUp(self):
-        self.fmp = FmPlugin(_DEFAULT_SPECIFIC_DATA)
+        self.fmp = FMPlugin(_DEFAULT_SPECIFIC_DATA)
         self.fmp.fabric.save_and_get_switch_ids = mock.Mock()
         self.fmp.fabric.save_and_get_switch_ids.return_value = ["SWITCH-4001", "SWITCH-4002"]
 
@@ -112,12 +112,12 @@ class TestGetSwitchInfo(TestCase):
         """Test when no switch ids are found."""
         assert isinstance(self.fmp.fabric.save_and_get_switch_ids, mock.Mock)
         self.fmp.fabric.save_and_get_switch_ids.return_value = []
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.get_switch_info()
 
     def test_get_switch_info_switch_id_not_found(self):
         """Test when the specified switch_id does not exist."""
-        with self.assertRaises(exc.SwitchNotFoundHwControlError):
+        with self.assertRaises(exc.SwitchNotFoundHWControlError):
             self.fmp.get_switch_info("SWITCH-4003")
 
     def test_get_switch_info_switch_id_found(self):
@@ -134,8 +134,8 @@ class TestGetSwitchInfo(TestCase):
         self.assertEqual(1, len(data))
         self.assertIsInstance(data["data"], list)
         self.assertEqual(2, len(data["data"]))
-        self.assertIsInstance(data["data"][0], FmSwitchData)
-        self.assertIsInstance(data["data"][1], FmSwitchData)
+        self.assertIsInstance(data["data"][0], FMSwitchData)
+        self.assertIsInstance(data["data"][1], FMSwitchData)
         self.assertEqual("SWITCH-4001", data["data"][0].switch_id)
         self.assertEqual("SWITCH-4002", data["data"][1].switch_id)
 
@@ -144,7 +144,7 @@ class TestConnect(TestCase):
     """Test class for connect method."""
 
     def setUp(self):
-        self.fmp = FmPlugin(_DEFAULT_SPECIFIC_DATA)
+        self.fmp = FMPlugin(_DEFAULT_SPECIFIC_DATA)
         self.dsplink_result = []
         self.usplink_result = []
         self.fmp.fabric = mock.Mock()
@@ -165,8 +165,7 @@ class TestConnect(TestCase):
         if path.startswith("CompositionService/ResourceBlocks"):
             if self.dsplink_result is None:
                 return None
-            links = [{"@odata.id": f"Systems/System-{x.rsplit('-', maxsplit=1)[-1]}"}
-                     for x in self.dsplink_result]
+            links = [{"@odata.id": f"Systems/System-{x.rsplit('-', maxsplit=1)[-1]}"} for x in self.dsplink_result]
             return {"Links": {"ComputerSystems": links}}
         if path.startswith("Systems/System"):
             if self.usplink_result is None:
@@ -180,34 +179,34 @@ class TestConnect(TestCase):
         """Test when no port ids are found."""
         assert isinstance(self.fmp.fabric.save_and_get_port_ids, mock.Mock)
         self.fmp.fabric.save_and_get_port_ids.return_value = []
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_connect_both_not_found(self):
         """Test when both the specified cpu_id and device_id do not exist."""
-        with self.assertRaises(exc.HostCpuAndDeviceNotFoundHwControlError):
+        with self.assertRaises(exc.HostCPUAndDeviceNotFoundHWControlError):
             self.fmp.connect("ComputeBlock-3", "DeviceBlock-5")
 
     def test_connect_usp_not_found(self):
         """Test when the specified cpu_id does not exist."""
-        with self.assertRaises(exc.HostCpuNotFoundHwControlError):
+        with self.assertRaises(exc.HostCPUNotFoundHWControlError):
             self.fmp.connect("ComputeBlock-3", "DeviceBlock-3")
 
     def test_connect_dsp_not_found(self):
         """Test when the specified device_id does not exist."""
-        with self.assertRaises(exc.DeviceNotFoundHwControlError):
+        with self.assertRaises(exc.DeviceNotFoundHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-5")
 
     def test_connect_usp_link_is_none(self):
         """Test when failing to retrieve link information from USP."""
         self.usplink_result = None
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_connect_dsp_link_is_none(self):
         """Test when failing to retrieve link information from DSP."""
         self.dsplink_result = None
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_connect_already_connected(self):
@@ -220,14 +219,14 @@ class TestConnect(TestCase):
     def test_connect_dsp_linked_to_anther_usp(self):
         """Test when the specified device_id is connected to a different cpu_id."""
         self.dsplink_result = ["ComputeBlock-2"]
-        with self.assertRaises(exc.RequestConflictHwControlError):
+        with self.assertRaises(exc.RequestConflictHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_connect_update_link_failed(self):
         """Test when the update process fails."""
         self.fmp.req.patch = mock.Mock()
         self.fmp.req.patch.return_value = None
-        with self.assertRaises(exc.FmConnectFailureHwControlError):
+        with self.assertRaises(exc.FMConnectFailureHWControlError):
             self.fmp.connect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_connect_success(self):
@@ -242,7 +241,7 @@ class TestDisconnect(TestCase):
     """Test class for disconnect method."""
 
     def setUp(self):
-        self.fmp = FmPlugin(_DEFAULT_SPECIFIC_DATA)
+        self.fmp = FMPlugin(_DEFAULT_SPECIFIC_DATA)
         self.fmp.fabric = mock.Mock()
         self.fmp.fabric.save_and_get_port_ids.return_value = self._get_port_ids()
         self.fmp.fabric.save_and_get_switch_ids.return_value = ["SWITCH-4001"]
@@ -263,8 +262,7 @@ class TestDisconnect(TestCase):
         if path.startswith("CompositionService/ResourceBlocks"):
             if self.dsplink_result is None:
                 return None
-            links = [{"@odata.id": f"Systems/System-{x.rsplit('-', maxsplit=1)[-1]}"}
-                     for x in self.dsplink_result]
+            links = [{"@odata.id": f"Systems/System-{x.rsplit('-', maxsplit=1)[-1]}"} for x in self.dsplink_result]
             return {"Links": {"ComputerSystems": links}}
         if path.startswith("Systems/System"):
             if self.usplink_result is None:
@@ -278,34 +276,34 @@ class TestDisconnect(TestCase):
         """Test when no port ids are found."""
         assert isinstance(self.fmp.fabric.save_and_get_port_ids, mock.Mock)
         self.fmp.fabric.save_and_get_port_ids.return_value = []
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_disconnect_both_not_found(self):
         """Test when both the specified cpu_id and device_id do not exist."""
-        with self.assertRaises(exc.HostCpuAndDeviceNotFoundHwControlError):
+        with self.assertRaises(exc.HostCPUAndDeviceNotFoundHWControlError):
             self.fmp.disconnect("ComputeBlock-3", "DeviceBlock-5")
 
     def test_disconnect_usp_not_found(self):
         """Test when the specified cpu_id does not exist."""
-        with self.assertRaises(exc.HostCpuNotFoundHwControlError):
+        with self.assertRaises(exc.HostCPUNotFoundHWControlError):
             self.fmp.disconnect("ComputeBlock-3", "DeviceBlock-3")
 
     def test_disconnect_dsp_not_found(self):
         """Test when the specified device_id does not exist."""
-        with self.assertRaises(exc.DeviceNotFoundHwControlError):
+        with self.assertRaises(exc.DeviceNotFoundHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-5")
 
     def test_disconnect_usp_link_is_none(self):
         """Test when failing to retrieve link information from USP."""
         self.usplink_result = None
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_disconnect_dsp_link_is_none(self):
         """Test when failing to retrieve link information from DSP."""
         self.dsplink_result = None
-        with self.assertRaises(exc.InternalHwControlError):
+        with self.assertRaises(exc.InternalHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_disconnect_already_disconnected(self):
@@ -318,14 +316,14 @@ class TestDisconnect(TestCase):
     def test_disconnect_dsp_linked_to_anther_usp(self):
         """Test when the specified device_id is connected to a different cpu_id."""
         self.usplink_result = ["DeviceBlock-4"]
-        with self.assertRaises(exc.RequestConflictHwControlError):
+        with self.assertRaises(exc.RequestConflictHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_disconnect_update_link_failed(self):
         """Test when the update process fails."""
         self.fmp.req.patch = mock.Mock()
         self.fmp.req.patch.return_value = None
-        with self.assertRaises(exc.FmDisconnectFailureHwControlError):
+        with self.assertRaises(exc.FMDisconnectFailureHWControlError):
             self.fmp.disconnect("ComputeBlock-1", "DeviceBlock-3")
 
     def test_disconnect_success(self):

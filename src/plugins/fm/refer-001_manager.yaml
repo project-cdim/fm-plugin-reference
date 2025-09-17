@@ -1,6 +1,6 @@
 ---
 module: reference.plugin
-class: FmPlugin
+class: FMPlugin
 specific_data:
     service_type: "http"
     service_host: "localhost"

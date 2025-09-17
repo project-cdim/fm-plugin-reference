@@ -12,7 +12,6 @@
 # License for the specific language governing permissions and limitations
 #  under the License.
 
-# pylint: disable=too-few-public-methods
 """
 Mock object of app.common.utils.fm_plugin_base
 """
@@ -24,8 +23,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, field_v
 _HEXADECIMAL = r"^[0-9a-fA-F]*$"
 
 
-class FmPortData(BaseModel):
-    """Mock class of FmPortData"""
+class FMPortData(BaseModel):
+    """Mock class of FMPortData"""
+
     model_config = ConfigDict(validate_assignment=True)
     id: StrictStr
     switch_id: Optional[StrictStr] = Field(None, alias="switchId")
@@ -62,16 +62,16 @@ class FmPortData(BaseModel):
         """PCIClassCode must be {'base': 0-255, 'sub': 0-255, 'prog': 0-255}"""
         if value is None:
             return value
-        assert set(["base", "sub", "prog"]) == set(value.keys())
-        assert len([x for x in value.values() if 0 <= x < 0x100]) == 3
+        if set(["base", "sub", "prog"]) != set(value.keys()) or len([x for x in value.values() if 0 <= x < 0x100]) != 3:
+            raise ValueError(
+                "The keys of the dictionary data are not 'base', 'sub', or 'prog', "
+                "or the values are not within the range of 0 to 255."
+            )
         return value
 
-    @field_validator("capacity")
-    @classmethod
-    def validate_capacity(cls, value):
-        """capacity"""
-        if value is None:
-            return value
+    @staticmethod
+    def _fix_capacity(value: dict):
+        """Fill in the missing information of capacity."""
         if len(value) == 1:
             if "volatile" in value:
                 value["total"] = value["volatile"]
@@ -86,29 +86,46 @@ class FmPortData(BaseModel):
                 value["persistent"] = value["total"] - value["volatile"]
             elif "persistent" in value and "total" in value:
                 value["volatile"] = value["total"] - value["persistent"]
-        assert "volatile" in value and "persistent" in value and "total" in value
-        assert value["total"] == value["persistent"] + value["volatile"]
-        assert value["total"] >= 0 and value["persistent"] >= 0 and value["volatile"] >= 0
+
+    @field_validator("capacity")
+    @classmethod
+    def validate_capacity(cls, value):
+        """capacity"""
+        if value is None:
+            return value
+
+        cls._fix_capacity(value)
+        if "volatile" not in value or "persistent" not in value or "total" not in value:
+            raise ValueError("The keys of the dictionary data are not 'volatile', 'persistent', or 'total'.")
+        if (
+            value["total"] != value["persistent"] + value["volatile"]
+            or value["total"] < 0
+            or value["persistent"] < 0
+            or value["volatile"] < 0
+        ):
+            raise ValueError("There are inconsistencies in the values for 'volatile', 'persistent', or 'total'.")
         return value
 
     @model_validator(mode="after")
-    def validate_porttype_cpu_pcie(self) -> Self:
+    def validate_port_type_cpu_pcie(self) -> Self:
         """PCIe data must be None if switchPortType is USP,
-        CPU data must be None if swithPortType is DSP
+        CPU data must be None if switchPortType is DSP
         """
-        if self.switch_port_type == "USP":
-            assert self.pcie_vendor_id is None
-            assert self.pcie_device_id is None
-            assert self.pcie_device_serial_number is None
-        if self.switch_port_type == "DSP":
-            assert self.cpu_manufacturer is None
-            assert self.cpu_model is None
-            assert self.cpu_serial_number is None
+        if self.switch_port_type == "USP" and (
+            self.pcie_vendor_id is not None
+            or self.pcie_device_id is not None
+            or self.pcie_device_serial_number is not None
+        ):
+            raise ValueError("The switchPortType is USP, but PCI information is set.")
+        if self.switch_port_type == "DSP" and (
+            self.cpu_manufacturer is not None or self.cpu_model is not None or self.cpu_serial_number is not None
+        ):
+            raise ValueError("The switchPortType is DSP, but CPU information is set.")
         return self
 
 
-class FmSwitchData(BaseModel):
-    """Mock class of FmSwitchData"""
+class FMSwitchData(BaseModel):
+    """Mock class of FMSwitchData"""
 
     model_config = ConfigDict(validate_assignment=True)
     switch_id: StrictStr = Field(..., alias="switchId")
@@ -120,5 +137,7 @@ class FmSwitchData(BaseModel):
 
 class FMPluginBase:
     """Mock class of FMPluginBase."""
+
+    # pylint: disable=too-few-public-methods
     def __init__(self, specific_data=None):
         self.specific_data = specific_data

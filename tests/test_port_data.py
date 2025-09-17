@@ -16,23 +16,28 @@
 Test program for _PortData class
 """
 
-from unittest import TestCase, mock
+from unittest import TestCase
 from test_http_requests import _DEFAULT_SPECIFIC_DATA
-from plugins.fm.reference.plugin import (
-    _ErrorCtrl,
-    _ErrorType,
-    _HttpRequests,
-    _PortData,
-    _SwitchData
-)
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HTTPRequests, _PortData, _SwitchData
 
 
 _DEFAULT_NONE_PORT_MEMBERS = [
-    "switch_id", "switch_port_number", "fabric_id", "link",
-    "device_type", "pci_class_code", "pcie_vendor_id", "pcie_device_id",
-    "pcie_device_serial_number", "cpu_manufacturer", "cpu_model",
-    "cpu_serial_number", "ltssm_state", "capacity"
+    "switch_id",
+    "switch_port_number",
+    "fabric_id",
+    "link",
+    "device_type",
+    "pci_class_code",
+    "pcie_vendor_id",
+    "pcie_device_id",
+    "pcie_device_serial_number",
+    "cpu_manufacturer",
+    "cpu_model",
+    "cpu_serial_number",
+    "ltssm_state",
+    "capacity",
 ]
+_LOG_PREFIX = "WARNING:plugins.fm.reference.plugin:"
 
 
 class TestsInit(TestCase):
@@ -40,7 +45,7 @@ class TestsInit(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
 
     def test___init___normal(self):
         """Test for the initialization of instance variables."""
@@ -59,7 +64,7 @@ class TestsSaveSwitchData(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.prt = _PortData("test", req)
         self.prt.zone = "zone"
         self.swt = _SwitchData("switchid", req)
@@ -69,10 +74,10 @@ class TestsSaveSwitchData(TestCase):
 
     def test_save_switch_data_switch_is_not_string(self):
         """Test when the switch_id of the _SwitchData class is not a string."""
-        self.swt.sid = 1  # type: ignore
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
+        self.swt.sid = 1  # type: ignore[reportGeneralTypeIssues]
+        with self.assertLogs(level="WARNING") as _cm:
             self.prt.save_switch_data(self.swt)
-            log_func.assert_called_with("Validation error 1")
+            self.assertIn(f"{_LOG_PREFIX}Validation error 1", _cm.output[0])
         self.assertEqual([_ErrorType.ERROR_INTERNAL], self.prt.err.error)
 
     def test_save_switch_data_manufacturer_is_none(self):
@@ -112,7 +117,7 @@ class TestsSaveZone(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.prt = _PortData("test", req)
         self.zone_path = "/redfish/v1/CompositionService/ResourceZones/"
 
@@ -144,7 +149,7 @@ class TestsGetPortData(TestCase):
 
     def setUp(self):
         err = _ErrorCtrl()
-        req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, err)
+        req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, err)
         self.prt = _PortData("test", req)
         self.prt.zone = "zone"
         self.swt = _SwitchData("switchid", req)
@@ -156,10 +161,23 @@ class TestsGetPortData(TestCase):
         """Test when the information cannot be retrieved."""
         prt = self.prt.get_port_data()
         self.assertEqual("test", prt.id)
-        for member in ["switch_id", "switch_port_number", "switch_port_type", "fabric_id", "link",
-                       "device_type", "pci_class_code", "pcie_vendor_id", "pcie_device_id",
-                       "pcie_device_serial_number", "cpu_manufacturer", "cpu_model",
-                       "cpu_serial_number", "ltssm_state", "capacity"]:
+        for member in [
+            "switch_id",
+            "switch_port_number",
+            "switch_port_type",
+            "fabric_id",
+            "link",
+            "device_type",
+            "pci_class_code",
+            "pcie_vendor_id",
+            "pcie_device_id",
+            "pcie_device_serial_number",
+            "cpu_manufacturer",
+            "cpu_model",
+            "cpu_serial_number",
+            "ltssm_state",
+            "capacity",
+        ]:
             self.assertIsNone(getattr(prt, member))
         self.assertEqual({}, prt.device_keys)
         self.assertEqual({}, prt.port_keys)

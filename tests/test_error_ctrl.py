@@ -71,39 +71,39 @@ class TestGet(TestCase):
     def test_get_one_incorrect(self):
         """Test when only ERROR_INCORRECT is set."""
         self.err.put(_ErrorType.ERROR_INCORRECT)
-        self.assertEqual(self.err.get(), exc.ConfigurationHwControlError)
+        self.assertEqual(self.err.get(), exc.ConfigurationHWControlError)
 
     def test_get_one_control(self):
         """Test when only ERROR_CONTROL is set."""
         self.err.put(_ErrorType.ERROR_CONTROL)
-        self.assertEqual(self.err.get(), exc.ControlObjectHwControlError)
+        self.assertEqual(self.err.get(), exc.ControlObjectHWControlError)
 
     def test_get_one_internal(self):
         """Test when only ERROR_INTERNAL is set."""
         self.err.put(_ErrorType.ERROR_INTERNAL)
-        self.assertEqual(self.err.get(), exc.InternalHwControlError)
+        self.assertEqual(self.err.get(), exc.InternalHWControlError)
 
     def test_get_error_not_set(self):
         """Test when no errors are set."""
         self.err.error = []
-        self.assertEqual(self.err.get(), exc.InternalHwControlError)
+        self.assertEqual(self.err.get(), exc.InternalHWControlError)
 
     def test_get_all_factor_set(self):
         """Test when all errors are set."""
         for errno in _ErrorType:
             self.err.put(errno)
             self.err.put(errno)
-        self.assertEqual(self.err.get(), exc.ConfigurationHwControlError)
+        self.assertEqual(self.err.get(), exc.ConfigurationHWControlError)
 
     def test_get_multi_control(self):
         """Test for the priority of multiple errors (second one)."""
         self.err.put(_ErrorType.ERROR_CONTROL)
         self.err.put(_ErrorType.ERROR_INCORRECT)
         self.err.put(_ErrorType.ERROR_INTERNAL)
-        self.assertEqual(self.err.get(), exc.ConfigurationHwControlError)
+        self.assertEqual(self.err.get(), exc.ConfigurationHWControlError)
 
     def test_get_multi_internal(self):
         """Test for the priority of multiple errors (third one)."""
         self.err.put(_ErrorType.ERROR_INTERNAL)
         self.err.put(_ErrorType.ERROR_CONTROL)
-        self.assertEqual(self.err.get(), exc.ControlObjectHwControlError)
+        self.assertEqual(self.err.get(), exc.ControlObjectHWControlError)

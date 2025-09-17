@@ -20,7 +20,7 @@ import copy
 import json
 from unittest import TestCase, mock
 from test_http_requests import _DEFAULT_SPECIFIC_DATA, _mock_response
-from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HttpRequests, _SwitchData
+from plugins.fm.reference.plugin import _ErrorCtrl, _ErrorType, _HTTPRequests, _SwitchData
 
 
 _DEFAULT_SWITCH_DATA = {
@@ -35,7 +35,7 @@ class TestsInit(TestCase):
 
     def setUp(self):
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, self.err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, self.err)
 
     def test___init___normal(self):
         """Test for the initialization of instance variables."""
@@ -53,17 +53,19 @@ class TestsSaveSwitchData(TestCase):
 
     def setUp(self):
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, self.err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, self.err)
         self.swt = _SwitchData("test", self.req)
 
     def _mock_call(self, status_code: int, text: str, error: bool = False):
-        with mock.patch("plugins.fm.reference.plugin.log.warning") as log_func:
-            with mock.patch("requests.get") as req_func:
-                req_func.return_value = _mock_response(status_code, text)
-                self.swt.save_switch_data()
+        with mock.patch("requests.get") as req_func:
+            req_func.return_value = _mock_response(status_code, text)
             if error:
-                self.assertIn("Validation error", log_func.call_args[0][0])
+                with self.assertLogs(level="WARNING") as _cm:
+                    self.swt.save_switch_data()
+                self.assertIn("Validation error", _cm.output[0])
                 self.assertEqual([_ErrorType.ERROR_INTERNAL], self.err.error)
+            else:
+                self.swt.save_switch_data()
 
     def test_save_switch_data_switch_is_none(self):
         """Test when failing to retrieve the switch schema."""
@@ -81,7 +83,7 @@ class TestsSaveSwitchData(TestCase):
     def test_save_switch_data_manufacturer_is_not_string(self):
         """Test when the manufacturer in the switch schema is not a string."""
         switch_data = copy.deepcopy(_DEFAULT_SWITCH_DATA)
-        switch_data["Manufacturer"] = {}  # type: ignore
+        switch_data["Manufacturer"] = {}  # type: ignore[reportGeneralTypeIssues]
         self._mock_call(200, json.dumps(switch_data), True)
         self.assertIsNone(self.swt.switch.switch_manufacturer)
 
@@ -94,7 +96,7 @@ class TestsSaveSwitchData(TestCase):
     def test_save_switch_data_model_is_not_string(self):
         """Test when the model in the switch schema is not a string."""
         switch_data = copy.deepcopy(_DEFAULT_SWITCH_DATA)
-        switch_data["Model"] = ["str1", "str2"]  # type: ignore
+        switch_data["Model"] = ["str1", "str2"]  # type: ignore[reportGeneralTypeIssues]
         self._mock_call(200, json.dumps(switch_data), True)
         self.assertIsNone(self.swt.switch.switch_model)
 
@@ -107,7 +109,7 @@ class TestsSaveSwitchData(TestCase):
     def test_save_switch_data_serial_number_is_not_string(self):
         """Test when the serial number in the switch schema is not a string."""
         switch_data = copy.deepcopy(_DEFAULT_SWITCH_DATA)
-        switch_data["SerialNumber"] = 5  # type: ignore
+        switch_data["SerialNumber"] = 5  # type: ignore[reportGeneralTypeIssues]
         self._mock_call(200, json.dumps(switch_data), True)
         self.assertIsNone(self.swt.switch.switch_serial_number)
 
@@ -124,7 +126,7 @@ class TestsSaveSwitchLink(TestCase):
 
     def setUp(self):
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, self.err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, self.err)
         self.swt = _SwitchData("test", self.req)
 
     def test_save_switch_link_only_myself(self):
@@ -158,7 +160,7 @@ class TestsGetSwitchData(TestCase):
 
     def setUp(self):
         self.err = _ErrorCtrl()
-        self.req = _HttpRequests(_DEFAULT_SPECIFIC_DATA, self.err)
+        self.req = _HTTPRequests(_DEFAULT_SPECIFIC_DATA, self.err)
         self.swt = _SwitchData("test", self.req)
 
     def test_get_switch_data_all_set(self):
